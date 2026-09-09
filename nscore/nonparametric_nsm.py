@@ -547,7 +547,10 @@ class MirroredContinuousNsmTest(MirroredTestMixin, SequentialTestBase):
             self._test_for_alternative._p_value_more,
             self._test_for_null._p_value_more,
         )
-        self._p_value = min(self._p_value_less, self._p_value_more)
+        self._p_value = self.compose_wrapper_p_value(
+            self._p_value_less,
+            self._p_value_more,
+        )
         if alt_pv <= null_pv:
             self._p_type = "alternative"
         else:

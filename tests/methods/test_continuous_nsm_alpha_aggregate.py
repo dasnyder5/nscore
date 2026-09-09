@@ -182,6 +182,104 @@ class TestWrapperAggregate:
         assert m._p_value_more == 1.0
         assert m._p_type == "N/A"
 
+    def test_ranking_p_value_matches_declared_alpha_rejection_invariant(self):
+        rng = np.random.default_rng(0)
+        m = MirroredContinuousNsmTest(
+            Hypothesis.P0LessThanP1,
+            alpha=0.05,
+            c=C_BINARY,
+            inference_mode="ranking",
+        )
+
+        for step in range(1, 26):
+            result = m.step(
+                rng.binomial(1, 0.2),
+                rng.binomial(1, 0.8),
+            )
+
+            wrapper_p_rejects = bool(m._p_value <= m.alpha)
+            test_rejects = result.decision is not Decision.FailToDecide
+            assert wrapper_p_rejects == test_rejects, (
+                f"step {step}: wrapper _p_value <= alpha disagrees with "
+                f"decision {result.decision}"
+            )
+
+    def test_comparison_mode_p_value_remains_plain_directional_min(self):
+        m = MirroredContinuousNsmTest(
+            Hypothesis.P0LessThanP1,
+            alpha=0.05,
+            c=C_BINARY,
+            inference_mode="comparison",
+        )
+
+        for _ in range(3):
+            m.step(0, 1)
+
+        raw_min = min(m._p_value_less, m._p_value_more)
+        assert m._p_value == pytest.approx(raw_min)
+
+    def test_ranking_no_ties_p_value_remains_plain_directional_min(self):
+        m = MirroredContinuousNsmTest(
+            Hypothesis.P0LessThanP1,
+            alpha=0.05,
+            c=C_BINARY,
+            inference_mode="ranking_no_ties",
+        )
+
+        for _ in range(3):
+            m.step(0, 1)
+
+        raw_min = min(m._p_value_less, m._p_value_more)
+        assert m._p_value == pytest.approx(raw_min)
+
+    def test_ranking_transforms_only_aggregate_p_value(self):
+        seq_0 = [0, 0, 0]
+        seq_1 = [1, 1, 1]
+        comparison = MirroredContinuousNsmTest(
+            Hypothesis.P0LessThanP1,
+            alpha=0.05,
+            c=C_BINARY,
+            inference_mode="comparison",
+        )
+        ranking = MirroredContinuousNsmTest(
+            Hypothesis.P0LessThanP1,
+            alpha=0.05,
+            c=C_BINARY,
+            inference_mode="ranking",
+        )
+
+        for datum_0, datum_1 in zip(seq_0, seq_1):
+            comparison.step(datum_0, datum_1)
+            ranking.step(datum_0, datum_1)
+
+        raw_min = min(ranking._p_value_less, ranking._p_value_more)
+        assert ranking._p_value_less == pytest.approx(comparison._p_value_less)
+        assert ranking._p_value_more == pytest.approx(comparison._p_value_more)
+        assert comparison._p_value == pytest.approx(raw_min)
+        assert ranking._p_value == pytest.approx(min(1.0, 2.0 * raw_min))
+
+    def test_p_type_is_unchanged_by_ranking_transform(self):
+        seq_0 = [0, 0, 1, 0, 0]
+        seq_1 = [1, 1, 1, 0, 1]
+        comparison = MirroredContinuousNsmTest(
+            Hypothesis.P0LessThanP1,
+            alpha=0.05,
+            c=C_BINARY,
+            inference_mode="comparison",
+        )
+        ranking = MirroredContinuousNsmTest(
+            Hypothesis.P0LessThanP1,
+            alpha=0.05,
+            c=C_BINARY,
+            inference_mode="ranking",
+        )
+
+        for datum_0, datum_1 in zip(seq_0, seq_1):
+            comparison.step(datum_0, datum_1)
+            ranking.step(datum_0, datum_1)
+
+        assert ranking._p_type == comparison._p_type
+
 
 # ---------------------------------------------------------------------------
 # reset() restores wrapper and child state
